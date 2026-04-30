@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Coco AI</title>
+<title>Coco AI Debug</title>
 <style>
   body { font-family: Arial; background: #0f172a; color: white; margin: 0; }
   h2 { padding: 10px; }
@@ -20,7 +20,7 @@
 </head>
 <body>
 
-<h2>🤖 Coco AI</h2>
+<h2>🤖 Coco AI (Debug Mode)</h2>
 
 <div id="chat"></div>
 
@@ -48,7 +48,6 @@ async function send() {
   addMessage("user", text);
 
   try {
-
     // IMAGE MODE
     if (text.startsWith("/image ")) {
       const prompt = text.slice(7);
@@ -66,14 +65,23 @@ async function send() {
         })
       });
 
-      const data = await res.json();
+      const raw = await res.text();
+      console.log("IMAGE RAW:", raw);
 
-      if (data.data && data.data[0]) {
+      let data;
+      try { data = JSON.parse(raw); } catch {}
+
+      if (!res.ok) {
+        addMessage("ai", "❌ API ERROR: " + raw);
+        return;
+      }
+
+      if (data?.data?.[0]?.url) {
         const img = document.createElement("img");
         img.src = data.data[0].url;
         document.getElementById("chat").appendChild(img);
       } else {
-        addMessage("ai", "Image failed.");
+        addMessage("ai", "⚠️ No image returned");
       }
 
       return;
@@ -92,14 +100,27 @@ async function send() {
       })
     });
 
-    const data = await res.json();
+    const raw = await res.text();
+    console.log("CHAT RAW:", raw);
 
-    // 🔥 FIX: safer extraction
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      addMessage("ai", "❌ Invalid JSON: " + raw);
+      return;
+    }
+
+    if (!res.ok) {
+      addMessage("ai", "❌ API ERROR: " + raw);
+      return;
+    }
+
     let reply = "";
 
     if (data.output_text) {
       reply = data.output_text;
-    } else if (data.output && data.output.length > 0) {
+    } else if (data.output) {
       for (const item of data.output) {
         if (item.content) {
           for (const c of item.content) {
@@ -110,13 +131,14 @@ async function send() {
     }
 
     if (!reply) {
-      reply = "⚠️ No reply (check API key or quota)";
+      reply = "⚠️ Empty response (check console)";
     }
 
     addMessage("ai", reply);
 
   } catch (err) {
-    addMessage("ai", "❌ Error: " + err.message);
+    console.error(err);
+    addMessage("ai", "❌ JS ERROR: " + err.message);
   }
 }
 </script>
