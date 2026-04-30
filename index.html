@@ -5,41 +5,17 @@
 <meta charset="UTF-8">
 <title>Coco AI</title>
 <style>
-  body {
-    font-family: Arial;
-    background: #0f172a;
-    color: white;
-    margin: 0;
-  }
+  body { font-family: Arial; background: #0f172a; color: white; margin: 0; }
   h2 { padding: 10px; }
-  #chat {
-    height: 75vh;
-    overflow-y: auto;
-    padding: 10px;
-  }
+  #chat { height: 75vh; overflow-y: auto; padding: 10px; }
   .msg { margin: 8px 0; }
   .user { color: #38bdf8; }
   .ai { color: #a78bfa; }
-  img { max-width: 200px; display: block; margin-top: 5px; }
+  img { max-width: 200px; margin-top: 5px; }
 
-  #bar {
-    display: flex;
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-  }
-  input {
-    flex: 1;
-    padding: 12px;
-    border: none;
-  }
-  button {
-    padding: 12px;
-    background: #6366f1;
-    color: white;
-    border: none;
-    cursor: pointer;
-  }
+  #bar { display: flex; position: fixed; bottom: 0; width: 100%; }
+  input { flex: 1; padding: 12px; border: none; }
+  button { padding: 12px; background: #6366f1; color: white; border: none; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -49,12 +25,12 @@
 <div id="chat"></div>
 
 <div id="bar">
-  <input id="input" placeholder="Say something or type /image prompt..." />
+  <input id="input" placeholder="Say something or /image prompt..." />
   <button onclick="send()">Send</button>
 </div>
 
 <script>
-const API_KEY = "YOUR_API_KEY_HERE"; // ⚠️ visible publicly
+const API_KEY = "YOUR_API_KEY_HERE";
 
 function addMessage(role, text) {
   const div = document.createElement("div");
@@ -63,7 +39,6 @@ function addMessage(role, text) {
   document.getElementById("chat").appendChild(div);
 }
 
-// Chat or image handler
 async function send() {
   const inputEl = document.getElementById("input");
   const text = inputEl.value.trim();
@@ -72,63 +47,77 @@ async function send() {
 
   addMessage("user", text);
 
-  // IMAGE COMMAND
-  if (text.startsWith("/image ")) {
-    const prompt = text.replace("/image ", "");
+  try {
 
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
+    // IMAGE MODE
+    if (text.startsWith("/image ")) {
+      const prompt = text.slice(7);
+
+      const res = await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + API_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-image-1",
+          prompt: prompt,
+          size: "512x512"
+        })
+      });
+
+      const data = await res.json();
+
+      if (data.data && data.data[0]) {
+        const img = document.createElement("img");
+        img.src = data.data[0].url;
+        document.getElementById("chat").appendChild(img);
+      } else {
+        addMessage("ai", "Image failed.");
+      }
+
+      return;
+    }
+
+    // CHAT MODE
+    const res = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + API_KEY,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "gpt-image-1",
-        prompt: prompt,
-        size: "512x512"
+        model: "gpt-4.1-mini",
+        input: text
       })
     });
 
     const data = await res.json();
 
-    if (data.data && data.data[0].url) {
-      const img = document.createElement("img");
-      img.src = data.data[0].url;
-      document.getElementById("chat").appendChild(img);
-    } else {
-      addMessage("ai", "Image generation failed.");
-    }
+    // 🔥 FIX: safer extraction
+    let reply = "";
 
-    return;
-  }
-
-  // CHAT
-  const res = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer " + API_KEY,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "gpt-4.1-mini",
-      input: text
-    })
-  });
-
-  const data = await res.json();
-
-  let reply = "No response";
-
-  if (data.output && data.output[0] && data.output[0].content) {
-    const parts = data.output[0].content;
-    for (let p of parts) {
-      if (p.type === "output_text") {
-        reply = p.text;
+    if (data.output_text) {
+      reply = data.output_text;
+    } else if (data.output && data.output.length > 0) {
+      for (const item of data.output) {
+        if (item.content) {
+          for (const c of item.content) {
+            if (c.text) reply += c.text;
+          }
+        }
       }
     }
-  }
 
-  addMessage("ai", reply);
+    if (!reply) {
+      reply = "⚠️ No reply (check API key or quota)";
+    }
+
+    addMessage("ai", reply);
+
+  } catch (err) {
+    addMessage("ai", "❌ Error: " + err.message);
+  }
 }
 </script>
 
