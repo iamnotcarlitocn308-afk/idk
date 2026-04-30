@@ -20,7 +20,7 @@
 </head>
 <body>
 
-<h2>🤖 Coco AI (Proxy Mode)</h2>
+<h2>🤖 Coco AI (Proxy Mode v2)</h2>
 
 <div id="chat"></div>
 
@@ -30,10 +30,10 @@
 </div>
 
 <script>
-const API_KEY = "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";
+const API_KEY = "YOUR_API_KEY_HERE";
 
-// proxy URL
-const PROXY = "https://corsproxy.io/?";
+// NEW proxy
+const PROXY = "https://api.allorigins.win/raw?url=";
 
 function addMessage(role, text) {
   const div = document.createElement("div");
@@ -51,38 +51,8 @@ async function send() {
   addMessage("user", text);
 
   try {
-    // IMAGE MODE
-    if (text.startsWith("/image ")) {
-      const prompt = text.slice(7);
-
-      const res = await fetch(PROXY + "https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + API_KEY,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "gpt-image-1",
-          prompt: prompt,
-          size: "512x512"
-        })
-      });
-
-      const data = await res.json();
-
-      if (data?.data?.[0]?.url) {
-        const img = document.createElement("img");
-        img.src = data.data[0].url;
-        document.getElementById("chat").appendChild(img);
-      } else {
-        addMessage("ai", "⚠️ Image failed");
-      }
-
-      return;
-    }
-
-    // CHAT MODE
-    const res = await fetch(PROXY + "https://api.openai.com/v1/responses", {
+    // CHAT
+    const res = await fetch(PROXY + encodeURIComponent("https://api.openai.com/v1/responses"), {
       method: "POST",
       headers: {
         "Authorization": "Bearer " + API_KEY,
@@ -94,13 +64,25 @@ async function send() {
       })
     });
 
-    const data = await res.json();
+    const raw = await res.text();
+    console.log("RAW:", raw);
 
-    let reply = "";
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      addMessage("ai", "❌ Invalid response");
+      return;
+    }
 
-    if (data.output_text) {
-      reply = data.output_text;
-    } else if (data.output) {
+    if (data.error) {
+      addMessage("ai", "❌ API: " + data.error.message);
+      return;
+    }
+
+    let reply = data.output_text || "";
+
+    if (!reply && data.output) {
       for (const item of data.output) {
         if (item.content) {
           for (const c of item.content) {
